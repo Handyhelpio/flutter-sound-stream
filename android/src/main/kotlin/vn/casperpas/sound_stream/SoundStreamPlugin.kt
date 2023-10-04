@@ -43,9 +43,9 @@ enum class SoundStreamStatus {
 
 /** SoundStreamPlugin */
 public class SoundStreamPlugin : FlutterPlugin,
-        MethodCallHandler,
-        PluginRegistry.RequestPermissionsResultListener,
-        ActivityAware {
+    MethodCallHandler,
+    PluginRegistry.RequestPermissionsResultListener,
+    ActivityAware {
     private val logTag = "SoundStreamPlugin"
     private val audioRecordPermissionCode = 14887
 
@@ -70,10 +70,10 @@ public class SoundStreamPlugin : FlutterPlugin,
     private var mPlayerSampleRate = 16000 // 16Khz
     private var mPlayerBufferSize = 10240
     private var mPlayerFormat: AudioFormat = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .setSampleRate(mPlayerSampleRate)
-            .build()
+        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+        .setSampleRate(mPlayerSampleRate)
+        .build()
 
     /** ======== Basic Plugin initialization ======== **/
 
@@ -116,7 +116,7 @@ public class SoundStreamPlugin : FlutterPlugin,
         } catch (e: Exception) {
             Log.e(logTag, "Unexpected exception", e)
             result.error(SoundStreamErrors.Unknown.name,
-                    "Unexpected exception", e.localizedMessage)
+                "Unexpected exception", e.localizedMessage)
         }
     }
 
@@ -161,7 +161,7 @@ public class SoundStreamPlugin : FlutterPlugin,
 
         val localContext = pluginContext
         permissionToRecordAudio = localContext != null && ContextCompat.checkSelfPermission(localContext,
-                Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         return permissionToRecordAudio
 
     }
@@ -175,12 +175,12 @@ public class SoundStreamPlugin : FlutterPlugin,
         if (!hasRecordPermission() && localActivity != null) {
             debugLog("requesting RECORD_AUDIO permission")
             ActivityCompat.requestPermissions(localActivity,
-                    arrayOf(Manifest.permission.RECORD_AUDIO), audioRecordPermissionCode)
+                arrayOf(Manifest.permission.RECORD_AUDIO), audioRecordPermissionCode)
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>?,
-                                            grantResults: IntArray?): Boolean {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>,
+                                            grantResults: IntArray): Boolean {
         when (requestCode) {
             audioRecordPermissionCode -> {
                 if (grantResults != null) {
@@ -208,7 +208,7 @@ public class SoundStreamPlugin : FlutterPlugin,
             return
         }
         permissionToRecordAudio = ContextCompat.checkSelfPermission(localContext,
-                Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (!permissionToRecordAudio) {
             requestRecordPermission()
         } else {
@@ -301,10 +301,10 @@ public class SoundStreamPlugin : FlutterPlugin,
         mPlayerSampleRate = call.argument<Int>("sampleRate") ?: mPlayerSampleRate
         debugLogging = call.argument<Boolean>("showLogs") ?: false
         mPlayerFormat = AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .setSampleRate(mPlayerSampleRate)
-                .build()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .setSampleRate(mPlayerSampleRate)
+            .build()
 
         mPlayerBufferSize = AudioTrack.getMinBufferSize(mPlayerSampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
 
@@ -313,10 +313,10 @@ public class SoundStreamPlugin : FlutterPlugin,
         }
 
         val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
-                .build()
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+            .build()
         mAudioTrack = AudioTrack(audioAttributes, mPlayerFormat, mPlayerBufferSize, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
         result.success(true)
         sendPlayerStatus(SoundStreamStatus.Initialized)
