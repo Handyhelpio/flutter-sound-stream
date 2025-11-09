@@ -161,15 +161,14 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
         debugLogging = argsArr["showLogs"] as? Bool ?? debugLogging
         mRecordFormat = AVAudioFormat(commonFormat: AVAudioCommonFormat.pcmFormatInt16, sampleRate: mRecordSampleRate, channels: 1, interleaved: true)
 
-        // Initialize and prepare mAudioEngine if not already done
-        if mAudioEngine == nil {
-            mAudioEngine = AVAudioEngine()
-            self.mInputNode = mAudioEngine.inputNode
-        }
-        mAudioEngine.prepare()
-        
         checkAndRequestPermission { isGranted in
             if isGranted {
+                // Initialize audio engine
+                if self.mAudioEngine == nil {
+                    self.mAudioEngine = AVAudioEngine()
+                    self.mInputNode = self.mAudioEngine.inputNode
+                }
+                
                 self.sendRecorderStatus(SoundStreamStatus.Initialized)
                 self.sendResult(result, true)
             } else {
@@ -181,13 +180,32 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
     }
     
     private func resetEngineForRecord() {
-        mAudioEngine.inputNode.removeTap(onBus: mRecordBus)
         let input = mAudioEngine.inputNode
-        let inputFormat = input.outputFormat(forBus: mRecordBus)
-        let converter = AVAudioConverter(from: inputFormat, to: mRecordFormat!)!
-        let ratio: Float = Float(inputFormat.sampleRate)/Float(mRecordFormat.sampleRate)
         
-        input.installTap(onBus: mRecordBus, bufferSize: mRecordBufferSize, format: inputFormat) { (buffer, time) -> Void in
+        // Remove existing tap if present
+        input.removeTap(onBus: mRecordBus)
+        
+        // Stop engine before installing tap (iOS 17 requirement)
+        if mAudioEngine.isRunning {
+            mAudioEngine.stop()
+        }
+        
+        // Use inputFormat instead of outputFormat for iOS 17 compatibility
+        let inputFormat = input.inputFormat(forBus: mRecordBus)
+        
+        // Fallback to default format if hardware format is invalid
+        var recordFormat = inputFormat
+        if inputFormat.sampleRate == 0 || inputFormat.channelCount == 0 {
+            recordFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                        sampleRate: 44100,
+                                        channels: 1,
+                                        interleaved: false)!
+        }
+        
+        let converter = AVAudioConverter(from: recordFormat, to: mRecordFormat!)!
+        let ratio: Float = Float(recordFormat.sampleRate)/Float(mRecordFormat.sampleRate)
+        
+        input.installTap(onBus: mRecordBus, bufferSize: mRecordBufferSize, format: recordFormat) { (buffer, time) -> Void in
             let inputCallback: AVAudioConverterInputBlock = { inNumPackets, outStatus in
                 outStatus.pointee = .haveData
                 return buffer
@@ -197,24 +215,45 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
             
             var error: NSError?
             let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputCallback)
-            assert(status != .error)
+            
+            if status == .error {
+                return
+            }
             
             if (self.mRecordFormat?.commonFormat == AVAudioCommonFormat.pcmFormatInt16) {
                 let values = self.audioBufferToBytes(convertedBuffer)
                 self.sendMicData(values)
             }
         }
+        
     }
     
     private func startRecording(_ result: @escaping FlutterResult) {
-        resetEngineForRecord()
-        startEngine()
-        sendRecorderStatus(SoundStreamStatus.Playing)
-        result(true)
+        do {
+            // Configure audio session
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true)
+            
+            // Install tap before starting engine
+            resetEngineForRecord()
+            
+            // Start engine after tap is installed
+            try mAudioEngine.start()
+            
+            sendRecorderStatus(SoundStreamStatus.Playing)
+            result(true)
+        } catch {
+            result(FlutterError(code: SoundStreamErrors.FailedToRecord.rawValue,
+                              message: "Failed to start recording",
+                              details: error.localizedDescription))
+        }
     }
     
     private func stopRecording(_ result: @escaping FlutterResult) {
-        mAudioEngine.inputNode.removeTap(onBus: mRecordBus)
+        if mAudioEngine.inputNode.numberOfInputs > 0 {
+            mAudioEngine.inputNode.removeTap(onBus: mRecordBus)
+        }
         stopEngine()
         sendRecorderStatus(SoundStreamStatus.Stopped)
         result(true)
